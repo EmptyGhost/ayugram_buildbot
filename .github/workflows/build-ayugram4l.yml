@@ -14,10 +14,6 @@ on:
         options:
         - Release
         - Debug
-  # 也可以在推送到主分支时自动触发
-  push:
-    branches:
-      - main
 
 jobs:
   build:
@@ -45,11 +41,7 @@ jobs:
       - name: Install poetry
         run: pipx install poetry
 
-      - name: Prepare build environment
-        working-directory: ./tdesktop
-        run: ./Telegram/build/prepare/linux.sh
-
-      - name: Build AyuGram (${{ env.BUILD_TYPE }})
+      - name: Build AyuGram
         working-directory: ./tdesktop
         run: |
           # 准备 Docker 命令的参数
