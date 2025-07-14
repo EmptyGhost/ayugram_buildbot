@@ -1,25 +1,26 @@
 # .github/workflows/build-ayugram.yml
 
-name: Build AyuGram for Linux
+name: Build and Package AyuGram for Linux
 
 on:
-  # 允许手动从 GitHub Actions 页面触发此工作流
   workflow_dispatch:
     inputs:
       build_type:
-        description: 'Build type'
+        description: 'Build type (Release is recommended for packaging)'
         required: true
         type: choice
         default: 'Release'
         options:
         - Release
         - Debug
+  push:
+    branches:
+      - main
 
 jobs:
-  build:
+  build_and_package:
     runs-on: ubuntu-latest
     
-    # 将构建类型设置为环境变量，方便后续步骤使用
     env:
       BUILD_TYPE: ${{ github.event.inputs.build_type || 'Release' }}
 
@@ -27,11 +28,8 @@ jobs:
       - name: Checkout AyuGram source code
         uses: actions/checkout@v4
         with:
-          # 从官方 AyuGram 仓库克隆代码
           repository: AyuGram/AyuGramDesktop
-          # 将代码检出到 'tdesktop' 目录，与指南保持一致
           path: tdesktop
-          # 递归克隆子模块，等同于 git clone --recursive
           submodules: 'recursive'
 
       - name: Set up Python and install poetry
@@ -41,41 +39,64 @@ jobs:
       - name: Install poetry
         run: pipx install poetry
 
-      - name: Build AyuGram
+      - name: Build AyuGram with Docker (${{ env.BUILD_TYPE }})
+        id: build
         working-directory: ./tdesktop
         run: |
-          # 准备 Docker 命令的参数
           DOCKER_ARGS="--rm -u $(id -u):$(id -g) -v $PWD:/usr/src/tdesktop"
 
-          # 如果是 Debug 构建，添加 -e CONFIG=Debug
           if [ "${{ env.BUILD_TYPE }}" == "Debug" ]; then
             DOCKER_ARGS="$DOCKER_ARGS -e CONFIG=Debug"
           fi
 
           # 执行 Docker 构建命令
-          # 注意：这里使用了公开的测试 API ID 和 HASH。
-          # 在生产或个人使用中，建议替换为您自己的密钥，并使用 GitHub Secrets 存储。
           docker run $DOCKER_ARGS \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D TDESKTOP_API_ID=2040 \
             -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
+      
+      - name: Strip binary to reduce size (Release only)
+        if: env.BUILD_TYPE == 'Release'
+        run: |
+          echo "Stripping the binary to reduce its size..."
+          strip ./tdesktop/out/${{ env.BUILD_TYPE }}/AyuGram
+          echo "Binary stripped."
+          ls -lh ./tdesktop/out/${{ env.BUILD_TYPE }}/AyuGram
 
-#      - name: Strip binary to reduce size (Release only)
-#        # 仅在 Release 构建时执行
-#        if: env.BUILD_TYPE == 'Release'
-#        run: |
-#          echo "Stripping the binary to reduce its size..."
-#          strip ./tdesktop/out/AyuGram
-#          echo "Binary stripped."
-#          ls -lh ./tdesktop/out
+      - name: Create Linux Packages using CPack
+        if: env.BUILD_TYPE == 'Release' # 打包通常只针对 Release 版本
+        working-directory: ./tdesktop/out
+        run: |
+          # CPack 需要安装一些工具来生成不同的包格式
+          sudo apt-get update
+          sudo apt-get install -y rpm
+          
+          echo "Running CPack to generate DEB, RPM, and TGZ packages..."
+          # -G <Generator> 用于指定包格式
+          cpack -G "DEB"
+          cpack -G "RPM"
+          cpack -G "TGZ" # 这是 .tar.gz 格式
+          
+          echo "Listing generated packages:"
+          ls -l ./*.{deb,rpm,tar.gz}
 
-      - name: Upload artifact
+      - name: Upload Linux Packages as Artifacts
+        if: env.BUILD_TYPE == 'Release'
         uses: actions/upload-artifact@v4
         with:
-          # 根据构建类型命名产物
-          name: Ayugram-Linux-${{ env.BUILD_TYPE }}
-          # 上传包含所有构建结果的 out 目录
-          path: ./tdesktop/out/
-          # 产物保留时间（天）
+          name: Ayugram-Linux-Packages
+          # 上传当前目录下的所有 .deb, .rpm, 和 .tar.gz 文件
+          path: ./tdesktop/out/*.{deb,rpm,tar.gz}
+          retention-days: 14
+
+      - name: Upload Portable Directory (Alternative)
+        # 仍然提供一个简单的便携版目录作为备选
+        run: |
+          cd ./tdesktop/out
+          tar -czvf ayugram-portable-linux-${{ env.BUILD_TYPE }}.tar.gz ${{ env.BUILD_TYPE }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ayugram-Linux-Portable-${{ env.BUILD_TYPE }}
+          path: ./tdesktop/out/ayugram-portable-linux-${{ env.BUILD_TYPE }}.tar.gz
           retention-days: 7
