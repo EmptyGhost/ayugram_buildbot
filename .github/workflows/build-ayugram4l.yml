@@ -45,7 +45,6 @@ jobs:
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D TDESKTOP_API_ID=2040 \
             -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 \
-            -D DESKTOP_APP_USE_PACKAGED=ON
 
       - name: Strip binary to reduce size (Release only)
         if: env.BUILD_TYPE == 'Release'
@@ -55,22 +54,11 @@ jobs:
           echo "Binary stripped."
           ls -lh ./tdesktop/out/${{ env.BUILD_TYPE }}/AyuGram
 
-      - name: Create Linux Packages using CPack
-        if: env.BUILD_TYPE == 'Release' # 打包通常只针对 Release 版本
-        working-directory: ./tdesktop
-        run: |
-          echo "Running CPack to generate DEB..."
-          # -G <Generator> 用于指定包格式
-          cpack -G "DEB" -P "AyuGram"
-          
-          echo "Listing generated packages:"
-          ls -l ./*.{deb}
-
       - name: Upload Linux Packages as Artifacts
         if: env.BUILD_TYPE == 'Release'
         uses: actions/upload-artifact@v4
         with:
           name: Ayugram-Linux-Packages
           # 上传当前目录下的所有 .deb文件
-          path: ./tdesktop/out/*.{deb}
+          path: ./tdesktop/out/${{ env.BUILD_TYPE }}/AyuGram
           retention-days: 14
