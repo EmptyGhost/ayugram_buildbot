@@ -61,7 +61,7 @@ jobs:
         run: |
           echo "Running CPack to generate DEB..."
           # -G <Generator> 用于指定包格式
-          cpack -G "DEB"
+          cpack -G "DEB" -P "AyuGram"
           
           echo "Listing generated packages:"
           ls -l ./*.{deb}
