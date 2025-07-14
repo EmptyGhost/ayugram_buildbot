@@ -61,14 +61,14 @@ jobs:
             -D TDESKTOP_API_ID=2040 \
             -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
 
-      - name: Strip binary to reduce size (Release only)
-        # 仅在 Release 构建时执行
-        if: env.BUILD_TYPE == 'Release'
-        run: |
-          echo "Stripping the binary to reduce its size..."
-          strip ./tdesktop/out/AyuGram
-          echo "Binary stripped."
-          ls -lh ./tdesktop/out
+#      - name: Strip binary to reduce size (Release only)
+#        # 仅在 Release 构建时执行
+#        if: env.BUILD_TYPE == 'Release'
+#        run: |
+#          echo "Stripping the binary to reduce its size..."
+#          strip ./tdesktop/out/AyuGram
+#          echo "Binary stripped."
+#          ls -lh ./tdesktop/out
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
