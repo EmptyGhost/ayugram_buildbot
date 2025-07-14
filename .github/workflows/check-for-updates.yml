@@ -3,12 +3,11 @@
 name: Check for AyuGram Updates
 
 on:
-  workflow_dispatch: # 允许手动触发检查
+  workflow_dispatch:
   schedule:
-    # 每小时的第 15 分钟运行一次
+    # 每小时运行一次
     - cron: '15 */4 * * *'
 
-# 赋予触发另一个工作流的权限
 permissions:
   actions: write
   contents: read
@@ -20,12 +19,11 @@ jobs:
       - name: Get latest release tag from this repository
         id: get_own_release
         run: |
-          # 获取本仓库的最新 release tag
-          # 如果没有 release，则输出空字符串
           LATEST_OWN_TAG=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName --jq '.[0].tagName' || echo "")
           echo "Our latest release tag: ${LATEST_OWN_TAG:-'None'}"
-          # 提取核心版本号，例如从 'v5.16.3-linux' 提取 '5.16.3'
           OUR_VERSION=$(echo "$LATEST_OWN_TAG" | sed -n 's/^v\([0-9.]*\).*/\1/p')
+          
+          # 正确的语法: 写入 GITHUB_OUTPUT 文件
           echo "our_version=${OUR_VERSION}" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -33,18 +31,15 @@ jobs:
       - name: Get latest release tag from AyuGram/AyuGramDesktop
         id: get_upstream_release
         run: |
-          # 获取上游仓库的最新 release tag
           LATEST_UPSTREAM_TAG=$(gh release list --repo AyuGram/AyuGramDesktop --limit 1 --json tagName --jq '.[0].tagName' || echo "")
-
           if [ -z "$LATEST_UPSTREAM_TAG" ]; then
             echo "Could not find any releases on upstream repository. Skipping."
             exit 0
           fi
-
           echo "Upstream latest release tag: $LATEST_UPSTREAM_TAG"
-          # 提取核心版本号，例如从 'v5.16.3' 提取 '5.16.3'
           UPSTREAM_VERSION=$(echo "$LATEST_UPSTREAM_TAG" | sed -n 's/^v\([0-9.]*\).*/\1/p')
 
+          # 正确的语法: 写入 GITHUB_OUTPUT 文件
           echo "upstream_version=${UPSTREAM_VERSION}" >> $GITHUB_OUTPUT
           echo "upstream_tag=${LATEST_UPSTREAM_TAG}" >> $GITHUB_OUTPUT
         env:
@@ -53,12 +48,11 @@ jobs:
       - name: Compare versions and trigger build if needed
         if: steps.get_upstream_release.outputs.upstream_version != '' && steps.get_upstream_release.outputs.upstream_version != steps.get_own_release.outputs.our_version
         run: |
-          echo "New version found! Upstream is ${{ steps.get_upstream_release.outputs.upstream_version }}, we have ${{ steps.get_own_release.outputs.our_version }}."
-          echo "Dispatching build workflow for version ${{ steps.get_upstream_release.outputs.upstream_version }}"
-          
+          echo "New version found! Dispatching build for version ${{ steps.get_upstream_release.outputs.upstream_version }}"
           gh workflow run build-and-release.yml \
             -R ${{ github.repository }} \
             -f version=${{ steps.get_upstream_release.outputs.upstream_version }} \
-            -f commit_sha=${{ steps.get_upstream_release.outputs.upstream_tag }}
+            -f commit_sha=${{ steps.get_upstream_release.outputs.upstream_tag }} \
+            -f build_type=Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
