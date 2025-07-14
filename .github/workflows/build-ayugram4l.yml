@@ -51,7 +51,8 @@ jobs:
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D TDESKTOP_API_ID=2040 \
-            -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
+            -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 \
+            -D DESKTOP_APP_USE_PACKAGED=ON
       
       - name: Strip binary to reduce size (Release only)
         if: env.BUILD_TYPE == 'Release'
@@ -73,10 +74,9 @@ jobs:
           # -G <Generator> 用于指定包格式
           cpack -G "DEB"
           cpack -G "RPM"
-          cpack -G "TGZ" # 这是 .tar.gz 格式
           
           echo "Listing generated packages:"
-          ls -l ./*.{deb,rpm,tar.gz}
+          ls -l ./*.{deb,rpm}
 
       - name: Upload Linux Packages as Artifacts
         if: env.BUILD_TYPE == 'Release'
@@ -84,16 +84,5 @@ jobs:
         with:
           name: Ayugram-Linux-Packages
           # 上传当前目录下的所有 .deb, .rpm, 和 .tar.gz 文件
-          path: ./tdesktop/out/*.{deb,rpm,tar.gz}
+          path: ./tdesktop/out/*.{deb,rpm}
           retention-days: 14
-
-      - name: Upload Portable Directory (Alternative)
-        # 仍然提供一个简单的便携版目录作为备选
-        run: |
-          cd ./tdesktop/out
-          tar -czvf ayugram-portable-linux-${{ env.BUILD_TYPE }}.tar.gz ${{ env.BUILD_TYPE }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Ayugram-Linux-Portable-${{ env.BUILD_TYPE }}
-          path: ./tdesktop/out/ayugram-portable-linux-${{ env.BUILD_TYPE }}.tar.gz
-          retention-days: 7
