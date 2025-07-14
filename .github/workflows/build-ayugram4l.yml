@@ -45,11 +45,7 @@ jobs:
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D TDESKTOP_API_ID=2040 \
             -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 \
-            -D DESKTOP_APP_USE_PACKAGED=ON \
-            -D CPACK_PACKAGE_VENDOR="AyuGram" \
-            -D CPACK_PACKAGE_NAME="AyuGram" \
-            -D CPACK_PACKAGE_DESCRIPTION="Desktop Telegram client with good customization and Ghost mode" \
-            -D CPACK_DEBIAN_PACKAGE_MAINTAINER="AyuGram Team"
+            -D DESKTOP_APP_USE_PACKAGED=ON
 
       - name: Strip binary to reduce size (Release only)
         if: env.BUILD_TYPE == 'Release'
@@ -61,7 +57,7 @@ jobs:
 
       - name: Create Linux Packages using CPack
         if: env.BUILD_TYPE == 'Release' # 打包通常只针对 Release 版本
-        working-directory: ./tdesktop/out
+        working-directory: ./tdesktop
         run: |
           echo "Running CPack to generate DEB..."
           # -G <Generator> 用于指定包格式
