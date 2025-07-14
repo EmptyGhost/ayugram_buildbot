@@ -1,6 +1,6 @@
 # .github/workflows/build-ayugram.yml
 
-name: Build and Package AyuGram for Linux
+name: Build Static AyuGram for Linux
 
 on:
   workflow_dispatch:
