@@ -6,14 +6,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to build (e.g., 5.16.3). Required for automated/release runs.'
-        required: false # 改为非必须，手动Debug时可不填
+        description: 'Version to build (e.g., 5.16.3). Required for Release builds.'
+        required: false
       commit_sha:
-        description: 'Commit SHA or Tag to build from (e.g., v5.16.3 or dev). Defaults to "dev".'
+        description: 'Commit SHA or Tag to build from (e.g., v5.16.3). Defaults to "dev" branch of upstream.'
         required: false
         default: 'dev'
       build_type:
-        description: 'Build type'
+        description: 'Build type (Release or Debug)'
         required: true
         type: choice
         default: 'Release'
@@ -22,11 +22,10 @@ on:
         - Debug
 
 permissions:
-  contents: write # Release 需要
-  actions: read   # Debug 需要
+  contents: write
 
 jobs:
-  build_linux: # Job 名称改为更通用
+  build_linux:
     runs-on: ubuntu-latest
     
     steps:
@@ -36,11 +35,10 @@ jobs:
           VERSION="${{ github.event.inputs.version }}"
           BUILD_TYPE="${{ github.event.inputs.build_type }}"
           
-          # 根据构建类型设置二进制文件路径
           if [ "$BUILD_TYPE" == "Release" ]; then
             BINARY_PATH="./tdesktop/out/Release/AyuGram"
-            # 只有 Release 才需要发布信息
             if [ -n "$VERSION" ]; then
+              # 正确的语法: 写入 GITHUB_OUTPUT 文件
               echo "VERSION_TAG=v${VERSION}-linux" >> $GITHUB_OUTPUT
               echo "RELEASE_NAME=AyuGram v${VERSION} (Linux Build)" >> $GITHUB_OUTPUT
               echo "ASSET_NAME=AyuGram-${VERSION}-linux-x64" >> $GITHUB_OUTPUT
@@ -49,14 +47,15 @@ jobs:
             BINARY_PATH="./tdesktop/out/Debug/AyuGram"
           fi
           
-          echo "BINARY_PATH=$BINARY_PATH" >> $GITHUB_ENV # 设定为环境变量供后续步骤使用
+          # 使用 GITHUB_ENV 来设置后续步骤的环境变量
+          echo "BINARY_PATH=$BINARY_PATH" >> $GITHUB_ENV
           echo "Binary path set to: $BINARY_PATH"
 
       - name: Checkout AyuGram source code
         uses: actions/checkout@v4
         with:
           repository: AyuGram/AyuGramDesktop
-          ref: ${{ github.event.inputs.commit_sha || 'dev' }} # 如果不提供，默认为 dev
+          ref: ${{ github.event.inputs.commit_sha }}
           path: tdesktop
           submodules: 'recursive'
 
@@ -64,9 +63,7 @@ jobs:
         working-directory: ./tdesktop
         run: |
           DOCKER_ARGS="--rm -u $(id -u):$(id -g) -v $PWD:/usr/src/tdesktop"
-          # 动态传入构建类型给 CMAKE
           BUILD_TYPE_ARG="-D CMAKE_BUILD_TYPE=${{ github.event.inputs.build_type }}"
-          
           docker run $DOCKER_ARGS \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
@@ -79,25 +76,24 @@ jobs:
         run: |
           if [ -f "${{ env.BINARY_PATH }}" ]; then
             echo "Binary found at ${{ env.BINARY_PATH }}"
+            # 正确的语法: 写入 GITHUB_OUTPUT 文件
             echo "exists=true" >> $GITHUB_OUTPUT
           else
-            echo "Binary NOT found at ${{ env.BINARY_PATH }}"
+            echo "::error::Binary NOT found at ${{ env.BINARY_PATH }}. Build might have failed."
+            # 正确的语法: 写入 GITHUB_OUTPUT 文件
             echo "exists=false" >> $GITHUB_OUTPUT
+            exit 1 # 如果文件不存在，直接让 Job 失败
           fi
           
-      # ===============================================================
-      #  RELEASE-ONLY STEPS (Strip, Create Release, Upload to Release)
-      # ===============================================================
-
       - name: Strip binary to reduce size
-        if: steps.check_file.outputs.exists == 'true' && github.event.inputs.build_type == 'Release'
+        if: github.event.inputs.build_type == 'Release'
         run: |
           echo "Stripping the release binary..."
           strip "${{ env.BINARY_PATH }}"
           ls -lh "${{ env.BINARY_PATH }}"
 
       - name: Create GitHub Release
-        if: steps.check_file.outputs.exists == 'true' && github.event.inputs.build_type == 'Release' && github.event.inputs.version != ''
+        if: github.event.inputs.build_type == 'Release' && github.event.inputs.version != ''
         id: create_release
         uses: actions/create-release@v1
         env:
@@ -106,7 +102,7 @@ jobs:
           tag_name: ${{ steps.setup_vars.outputs.VERSION_TAG }}
           release_name: ${{ steps.setup_vars.outputs.RELEASE_NAME }}
           body: |
-            Automated Linux build for AyuGram **${{ github.event.inputs.version }}**.
+            Automated Linux build for AyuGram **v${{ github.event.inputs.version }}**.
             Triggered by upstream release: `AyuGram/AyuGramDesktop@${{ github.event.inputs.commit_sha }}`
           draft: false
           prerelease: false
@@ -122,13 +118,9 @@ jobs:
           asset_name: ${{ steps.setup_vars.outputs.ASSET_NAME }}
           asset_content_type: application/octet-stream
           
-      # ===============================================================
-      #  DEBUG-ONLY STEP (Upload as Artifact)
-      # ===============================================================
-
       - name: Upload Debug Artifact
-        if: steps.check_file.outputs.exists == 'true' && github.event.inputs.build_type == 'Debug'
+        if: github.event.inputs.build_type == 'Debug'
         uses: actions/upload-artifact@v4
         with:
-          name: AyuGram-Debug-Build-Linux
+          name: AyuGram-Debug-Build-${{ github.run_id }}
           path: ${{ env.BINARY_PATH }}
