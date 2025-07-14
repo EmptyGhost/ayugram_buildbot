@@ -13,9 +13,6 @@ on:
         options:
         - Release
         - Debug
-  push:
-    branches:
-      - main
 
 jobs:
   build_and_package:
